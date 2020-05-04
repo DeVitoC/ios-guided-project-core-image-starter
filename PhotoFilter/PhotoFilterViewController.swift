@@ -8,6 +8,19 @@ class PhotoFilterViewController: UIViewController {
     let context = CIContext(options: nil)
     var originalImage: UIImage? {
         didSet {
+            // resize the scaledImage and set it
+            guard let originalImage = originalImage else { return }
+            
+            var scaledSize = imageView.bounds.size
+            let scale = UIScreen.main.scale
+            
+            scaledSize = CGSize(width: scaledSize.width * scale, height: scaledSize.height * scale)
+            
+            scaledImage = originalImage.imageByScaling(toSize: scaledSize)
+        }
+    }
+    var scaledImage: UIImage? {
+        didSet {
             updateViews()
         }
     }
@@ -60,8 +73,8 @@ class PhotoFilterViewController: UIViewController {
     }
     
     private func updateViews() {
-        if let originalImage = originalImage {
-            imageView.image = filterImage(originalImage)
+        if let scaledImage = scaledImage {
+            imageView.image = filterImage(scaledImage)
         } else {
             imageView.image = nil
         }
@@ -86,8 +99,34 @@ class PhotoFilterViewController: UIViewController {
 	}
 	
 	@IBAction func savePhotoButtonPressed(_ sender: UIButton) {
-		// TODO: Save to photo library
+		guard let originalImage = originalImage else { return }
+        
+        guard let processedImage = filterImage(originalImage.flattened) else { return }
+        
+        PHPhotoLibrary.requestAuthorization { (status) in
+            guard status == .authorized else { return }
+            // Let the library know we are going to make changes
+            PHPhotoLibrary.shared().performChanges({
+                // Make a new photo creation request
+                PHAssetCreationRequest.creationRequestForAsset(from: processedImage)
+            }, completionHandler: { (success, error) in
+                if let error = error {
+                    NSLog("Error saving photo: \(error)")
+                    return
+                }
+                DispatchQueue.main.async {
+                    self.presentSuccessfulSaveAlert()
+                }
+            })
+        }
 	}
+    
+    private func presentSuccessfulSaveAlert() {
+        let alert = UIAlertController(title: "Photo Saved!", message: "The photo has been saved to your Photo Library!", preferredStyle: .alert)
+        let okayAction = UIAlertAction(title: "Okay", style: .default, handler: nil)
+        alert.addAction(okayAction)
+        present(alert, animated: true, completion: nil)
+    }
 	
 
 	// MARK: Slider events
